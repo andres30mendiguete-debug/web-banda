@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<!--
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                      INSTRUCTIVO – PANEL CON GOOGLE SHEETS                   ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║                                                                              ║
+║ 1) CREA UNA HOJA DE CÁLCULO en Google Sheets con una pestaña llamada         ║
+║    "Eventos". La FILA 1 debe tener EXACTAMENTE estos encabezados             ║
+║    (en minúsculas, sin tildes):                                              ║
+║                                                                              ║
+║    | id | ciudad | evento | fecha | hora | mapa_url | foto_url | estado |    ║
+║                                                                              ║
+║    Columnas OPCIONALES (puedes añadirlas al final si quieres):              ║
+║    | local | direccion |                                                     ║
+║                                                                              ║
+║    • id        → número o texto único (1, 2, 3…). Solo como referencia.      ║
+║    • ciudad    → Ej: Lima                                                    ║
+║    • evento    → Nombre del evento o del local. Ej: "Noche de Rock – Bar X"  ║
+║    • fecha     → Formato AAAA-MM-DD (2026-12-20) o DD/MM/AAAA (20/12/2026)   ║
+║    • hora      → Formato 24h HH:MM. Ej: 21:30                                ║
+║    • mapa_url  → Enlace de Google Maps ("Compartir" → "Copiar enlace").      ║
+║                  Si lo dejas vacío, se buscará la dirección automáticamente. ║
+║    • foto_url  → URL pública de una imagen (jpg/png/webp).                   ║
+║    • estado    → Texto del badge. Ej: "-50% Entradas", "Próximamente",       ║
+║                  "Agotado", "Últimas entradas"…                              ║
+║    • local     → (opcional) Nombre del local, si es distinto del evento.     ║
+║    • direccion → (opcional) Dirección exacta. Ej: "Av. Larco 123, Miraflores"║
+║                                                                              ║
+║    ⚠ IMPORTANTE: selecciona las columnas "fecha" y "hora" y ponles           ║
+║      Formato → Número → "Texto sin formato", para que Google no las          ║
+║      convierta a otro formato.                                               ║
+║                                                                              ║
+║    (Opcional) Crea una segunda pestaña llamada "Canciones" con:              ║
+║    | titulo | artista | audio_url | portada_url |                            ║
+║    audio_url debe ser un enlace DIRECTO a un .mp3 (no una página web).       ║
+║                                                                              ║
+║ 2) PUBLICA LA HOJA:                                                          ║
+║    Archivo → Compartir → Publicar en la web → "Todo el documento" →          ║
+║    Publicar. (También: Compartir → "Cualquier persona con el enlace" →       ║
+║    Lector.)                                                                  ║
+║                                                                              ║
+║ 3) COPIA EL ID DE LA HOJA desde la URL del navegador:                        ║
+║    https://docs.google.com/spreadsheets/d/ ESTE_ES_EL_ID /edit#gid=0         ║
+║                                                                              ║
+║ 4) PÉGALO más abajo en CONFIG.SHEET_ID (busca "PEGA_AQUI_TU_ID").            ║
+║    Guarda el archivo y súbelo a cualquier hosting (Netlify, GitHub Pages…).  ║
+║                                                                              ║
+║  ► ALTERNATIVA SheetDB: si usas https://sheetdb.io, pon tu endpoint en       ║
+║    CONFIG.EVENTS_URL (ej: "https://sheetdb.io/api/v1/abc123") y deja         ║
+║    SHEET_ID vacío. El código detecta JSON o CSV automáticamente.             ║
+║                                                                              ║
+║  ► FUNCIONAMIENTO AUTOMÁTICO:                                                ║
+║    • La página consulta la hoja cada CONFIG.REFRESH_SECONDS segundos.        ║
+║    • Si borras una fila → el concierto desaparece en la próxima consulta.   ║
+║    • Si la fecha/hora de un evento ya pasó → se oculta solo y el banner      ║
+║      rojo salta al siguiente concierto futuro.                               ║
+║    • Mientras no configures la hoja, se muestran datos de DEMOSTRACIÓN.      ║
+║                                                                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+-->
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mi Banda – Música y Presentaciones</title>
+  <meta name="description" content="Escucha nuestras canciones y descubre nuestras próximas presentaciones en vivo." />
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: { brand: { DEFAULT: '#E61C24', dark: '#9E0F15', light: '#FF4A50' } },
+          fontFamily: { display: ['Bebas Neue', 'sans-serif'], body: ['Inter', 'sans-serif'] }
+        }
+      }
+    };
+  </script>
+
+  <!-- FontAwesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+
+  <!-- Fuentes -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <style>
+    html { scroll-behavior: smooth; }
+    body { font-family: 'Inter', sans-serif; background: #0b0b0d; }
+    .font-display { font-family: 'Bebas Neue', sans-serif; letter-spacing: .04em; }
+
+    /* Banner rojo con degradado elegante */
+    .alert-banner {
+      background:
+        radial-gradient(1200px 200px at 10% -50%, rgba(255,255,255,.18), transparent 60%),
+        linear-gradient(100deg, #9E0F15 0%, #E61C24 35%, #FF3B42 55%, #E61C24 75%, #B3141B 100%);
+      background-size: 100% 100%, 200% 100%;
+      animation: shine 9s ease-in-out infinite;
+    }
+    @keyframes shine { 0%,100% { background-position: 0 0, 0% 0; } 50% { background-position: 0 0, 100% 0; } }
+
+    .count-box {
+      background: rgba(0,0,0,.35);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      border: 1px solid rgba(255,255,255,.15);
+    }
+
+    .pulse-dot { animation: pulse 1.4s infinite; }
+    @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255,255,255,.7); } 70% { box-shadow: 0 0 0 10px rgba(255,255,255,0); } 100% { box-shadow: 0 0 0 0 rgba(255,255,255,0); } }
+
+    /* Ecualizador animado de la canción en reproducción */
+    .eq span { display:inline-block; width:3px; margin-right:2px; background:#E61C24; animation: eq 1s infinite ease-in-out; }
+    .eq span:nth-child(2) { animation-delay: .2s; }
+    .eq span:nth-child(3) { animation-delay: .4s; }
+    .eq.paused span { animation-play-state: paused; }
+    @keyframes eq { 0%,100% { height: 4px; } 50% { height: 14px; } }
+
+    /* Reproductor nativo en tono oscuro */
+    audio { width: 100%; color-scheme: dark; }
+
+    .card-img { transition: transform .6s ease; }
+    .event-card:hover .card-img { transform: scale(1.06); }
+
+    .skeleton { background: linear-gradient(90deg, #1a1a1f 25%, #26262d 50%, #1a1a1f 75%); background-size: 200% 100%; animation: sk 1.4s infinite; }
+    @keyframes sk { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+  </style>
+</head>
+
+<body class="text-white antialiased">
+
+  <!-- ═════════════════════ 1. BANNER DE ALERTA ROJO (FIJO) ═════════════════════ -->
+  <div id="alertBanner" class="alert-banner fixed top-0 inset-x-0 z-50 shadow-2xl shadow-red-900/40">
+    <div class="max-w-7xl mx-auto px-4 py-2.5 flex flex-col md:flex-row items-center justify-between gap-2 md:gap-6">
+      <div class="flex items-center gap-3 min-w-0 text-center md:text-left">
+        <span class="hidden sm:inline-block w-2.5 h-2.5 rounded-full bg-white pulse-dot shrink-0"></span>
+        <div class="min-w-0">
+          <p class="text-[10px] sm:text-xs uppercase tracking-[.2em] font-bold text-white/80">
+            <i class="fa-solid fa-bolt mr-1"></i> Próximo concierto
+          </p>
+          <p id="bannerTitle" class="font-display text-xl sm:text-2xl leading-tight truncate">Cargando presentaciones…</p>
+          <p id="bannerInfo" class="text-xs sm:text-sm text-white/90 truncate"></p>
+        </div>
+      </div>
+
+      <div id="countdown" class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+        <div class="count-box rounded-lg px-2 sm:px-3 py-1 text-center min-w-[52px] sm:min-w-[62px]">
+          <div id="cdDays" class="font-display text-2xl sm:text-3xl leading-none">--</div>
+          <div class="text-[9px] sm:text-[10px] uppercase tracking-widest text-white/75">Días</div>
+        </div>
+        <div class="count-box rounded-lg px-2 sm:px-3 py-1 text-center min-w-[52px] sm:min-w-[62px]">
+          <div id="cdHours" class="font-display text-2xl sm:text-3xl leading-none">--</div>
+          <div class="text-[9px] sm:text-[10px] uppercase tracking-widest text-white/75">Horas</div>
+        </div>
+        <div class="count-box rounded-lg px-2 sm:px-3 py-1 text-center min-w-[52px] sm:min-w-[62px]">
+          <div id="cdMins" class="font-display text-2xl sm:text-3xl leading-none">--</div>
+          <div class="text-[9px] sm:text-[10px] uppercase tracking-widest text-white/75">Min</div>
+        </div>
+        <div class="count-box rounded-lg px-2 sm:px-3 py-1 text-center min-w-[52px] sm:min-w-[62px]">
+          <div id="cdSecs" class="font-display text-2xl sm:text-3xl leading-none">--</div>
+          <div class="text-[9px] sm:text-[10px] uppercase tracking-widest text-white/75">Seg</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Espaciador: su altura se ajusta a la del banner por JS -->
+  <div id="bannerSpacer" class="h-28 md:h-20"></div>
+
+  <!-- ═════════════════════ NAVEGACIÓN ═════════════════════ -->
+  <nav id="mainNav" class="sticky z-40 bg-black/70 backdrop-blur border-b border-white/5">
+    <div class="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
+      <a href="#inicio" class="font-display text-2xl tracking-wider">
+        <i class="fa-solid fa-guitar text-brand mr-1"></i> MI BANDA
+      </a>
+      <div class="flex items-center gap-4 sm:gap-6 text-sm font-semibold text-white/80">
+        <a href="#canciones" class="hover:text-brand transition"><i class="fa-solid fa-music sm:mr-1"></i><span class="hidden sm:inline">Canciones</span></a>
+        <a href="#presentaciones" class="hover:text-brand transition"><i class="fa-solid fa-ticket sm:mr-1"></i><span class="hidden sm:inline">Presentaciones</span></a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ═════════════════════ HERO ═════════════════════ -->
+  <header id="inicio" class="relative overflow-hidden">
+    <div class="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1501386761578-eac5c94b800a?auto=format&fit=crop&w=1600&q=70')] bg-cover bg-center opacity-30"></div>
+    <div class="absolute inset-0 bg-gradient-to-b from-black/40 via-black/60 to-[#0b0b0d]"></div>
+    <div class="relative max-w-7xl mx-auto px-4 py-20 sm:py-28 text-center">
+      <p class="uppercase tracking-[.35em] text-brand font-bold text-xs sm:text-sm mb-3">Música en vivo</p>
+      <h1 class="font-display text-5xl sm:text-7xl md:text-8xl leading-none">Siente el ritmo <span class="text-brand">en vivo</span></h1>
+      <p class="mt-5 max-w-xl mx-auto text-white/70">Escucha nuestras canciones y no te pierdas ninguna de nuestras próximas presentaciones.</p>
+      <div class="mt-8 flex flex-wrap justify-center gap-3">
+        <a href="#canciones" class="px-6 py-3 rounded-full bg-brand hover:bg-brand-light transition font-bold shadow-lg shadow-red-900/40">
+          <i class="fa-solid fa-play mr-2"></i>Escuchar ahora
+        </a>
+        <a href="#presentaciones" class="px-6 py-3 rounded-full border border-white/25 hover:border-white transition font-bold">
+          <i class="fa-regular fa-calendar mr-2"></i>Ver fechas
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- ═════════════════════ 2. CANCIONES ═════════════════════ -->
+    <section id="canciones" class="max-w-7xl mx-auto px-4 py-16 scroll-mt-40">
+      <div class="flex items-end justify-between mb-8">
+        <div>
+          <p class="text-brand uppercase tracking-[.25em] text-xs font-bold">Escucha</p>
+          <h2 class="font-display text-4xl sm:text-5xl">Canciones</h2>
+        </div>
+        <span id="songCount" class="text-white/50 text-sm"></span>
+      </div>
+
+      <div class="grid lg:grid-cols-5 gap-6">
+        <!-- Reproductor -->
+        <div class="lg:col-span-2 bg-gradient-to-br from-[#1a1a1f] to-[#111114] rounded-2xl p-6 border border-white/5 lg:sticky lg:top-40 self-start">
+          <div class="relative aspect-square rounded-xl overflow-hidden mb-5 bg-black">
+            <img id="playerCover" src="" alt="Portada" class="w-full h-full object-cover" />
+            <div class="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent"></div>
+            <div class="absolute bottom-3 left-3 right-3">
+              <p class="text-[10px] uppercase tracking-widest text-brand font-bold">Reproduciendo</p>
+              <h3 id="playerTitle" class="font-display text-3xl leading-tight truncate">—</h3>
+              <p id="playerArtist" class="text-white/70 text-sm truncate">—</p>
+            </div>
+          </div>
+
+          <audio id="audioPlayer" controls preload="metadata"></audio>
+
+          <div class="flex items-center justify-center gap-6 mt-4 text-xl">
+            <button id="btnPrev" class="w-11 h-11 rounded-full hover:bg-white/10 transition" aria-label="Anterior"><i class="fa-solid fa-backward-step"></i></button>
+            <button id="btnPlay" class="w-14 h-14 rounded-full bg-brand hover:bg-brand-light transition shadow-lg shadow-red-900/40" aria-label="Reproducir/Pausar"><i class="fa-solid fa-play"></i></button>
+            <button id="btnNext" class="w-11 h-11 rounded-full hover:bg-white/10 transition" aria-label="Siguiente"><i class="fa-solid fa-forward-step"></i></button>
+          </div>
+        </div>
+
+        <!-- Lista de canciones -->
+        <ul id="songList" class="lg:col-span-3 space-y-2"></ul>
+      </div>
+    </section>
+
+    <!-- ═════════════════════ 3. PRÓXIMAS PRESENTACIONES ═════════════════════ -->
+    <section id="presentaciones" class="max-w-7xl mx-auto px-4 py-16 scroll-mt-40">
+      <div class="flex flex-wrap items-end justify-between gap-3 mb-8">
+        <div>
+          <p class="text-brand uppercase tracking-[.25em] text-xs font-bold">En vivo</p>
+          <h2 class="font-display text-4xl sm:text-5xl">Próximas Presentaciones</h2>
+        </div>
+        <p id="syncStatus" class="text-xs text-white/50 flex items-center gap-2">
+          <i class="fa-solid fa-rotate fa-spin"></i> Sincronizando…
+        </p>
+      </div>
+
+      <div id="eventsGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"></div>
+
+      <div id="eventsEmpty" class="hidden text-center py-16 rounded-2xl border border-dashed border-white/10">
+        <i class="fa-regular fa-calendar-xmark text-5xl text-white/30 mb-4"></i>
+        <p class="font-display text-3xl">No hay presentaciones programadas</p>
+        <p class="text-white/60 mt-1">Muy pronto anunciaremos nuevas fechas. ¡Vuelve pronto!</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- ═════════════════════ FOOTER ═════════════════════ -->
+  <footer class="border-t border-white/5 mt-10">
+    <div class="max-w-7xl mx-auto px-4 py-10 flex flex-col sm:flex-row items-center justify-between gap-4 text-white/50 text-sm">
+      <p>© <span id="year"></span> Mi Banda. Todos los derechos reservados.</p>
+      <div class="flex gap-5 text-lg">
+        <a href="#" class="hover:text-brand transition" aria-label="Instagram"><i class="fa-brands fa-instagram"></i></a>
+        <a href="#" class="hover:text-brand transition" aria-label="Facebook"><i class="fa-brands fa-facebook"></i></a>
+        <a href="#" class="hover:text-brand transition" aria-label="YouTube"><i class="fa-brands fa-youtube"></i></a>
+        <a href="#" class="hover:text-brand transition" aria-label="Spotify"><i class="fa-brands fa-spotify"></i></a>
+        <a href="#" class="hover:text-brand transition" aria-label="TikTok"><i class="fa-brands fa-tiktok"></i></a>
+      </div>
+    </div>
+  </footer>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════════════
+   ⚙️  CONFIGURACIÓN  —  ¡SOLO NECESITAS EDITAR ESTA SECCIÓN!
+   ════════════════════════════════════════════════════════════════════════════ */
+const CONFIG = {
+  // ① ID de tu Google Sheet (ver instructivo al inicio del archivo).
+  SHEET_ID: 'PEGA_AQUI_TU_ID',
+
+  // Nombres exactos de las pestañas dentro de la hoja.
+  EVENTS_SHEET: 'Eventos',
+  SONGS_SHEET:  'Canciones',      // Opcional. Si no existe, se usan las canciones de abajo.
+
+  // ② ALTERNATIVA: URL directa de una API (SheetDB, CSV publicado, etc.).
+  //    Si la rellenas, tiene prioridad sobre SHEET_ID.
+  //    Ej: 'https://sheetdb.io/api/v1/abc123'
+  //    Ej: 'https://docs.google.com/spreadsheets/d/e/2PACX-.../pub?gid=0&single=true&output=csv'
+  EVENTS_URL: '',
+  SONGS_URL:  '',
+
+  // Cada cuántos segundos se vuelve a leer la hoja (tiempo real).
+  REFRESH_SECONDS: 60,
+
+  // Imagen por defecto si un evento no tiene foto o la URL falla.
+  DEFAULT_PHOTO: 'https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?auto=format&fit=crop&w=800&q=70'
+};
+
+/* Canciones por defecto (se usan si no configuras la pestaña "Canciones").
+   Reemplaza "audio_url" por enlaces DIRECTOS a tus archivos .mp3. */
+const DEFAULT_SONGS = [
+  { titulo: 'Fuego en la Ciudad', artista: 'Mi Banda', audio_url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3', portada_url: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?auto=format&fit=crop&w=600&q=70' },
+  { titulo: 'Noches Eléctricas',  artista: 'Mi Banda', audio_url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3', portada_url: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=600&q=70' },
+  { titulo: 'Corazón de Asfalto', artista: 'Mi Banda', audio_url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3', portada_url: 'https://images.unsplash.com/photo-1459749411175-04bf5292ceea?auto=format&fit=crop&w=600&q=70' },
+  { titulo: 'Último Tren',        artista: 'Mi Banda', audio_url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3', portada_url: 'https://images.unsplash.com/photo-1506157786151-b8491531f063?auto=format&fit=crop&w=600&q=70' },
+  { titulo: 'Eco del Mar',        artista: 'Mi Banda', audio_url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3', portada_url: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=600&q=70' }
+];
+
+/* Eventos de DEMOSTRACIÓN (solo se muestran mientras no configures la hoja).
+   Las fechas se generan relativas a hoy para que siempre se vean "futuras". */
+function buildDemoEvents() {
+  const d = (days, time) => {
+    const x = new Date(); x.setDate(x.getDate() + days);
+    return { fecha: `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`, hora: time };
+  };
+  return [
+    { id: 1, ciudad: 'Lima',     evento: 'Noche de Rock en Vivo', local: 'La Noche de Barranco', direccion: 'Av. Bolognesi 307, Barranco', ...d(2, '21:30'),  mapa_url: '', foto_url: 'https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?auto=format&fit=crop&w=800&q=70', estado: '-50% Entradas' },
+    { id: 2, ciudad: 'Arequipa', evento: 'Festival del Sur',      local: 'Centro de Convenciones', direccion: 'Calle Mercaderes 200, Arequipa', ...d(9, '20:00'),  mapa_url: '', foto_url: 'https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?auto=format&fit=crop&w=800&q=70', estado: 'Próximamente' },
+    { id: 3, ciudad: 'Cusco',    evento: 'Acústico Andino',       local: 'Ukukus Bar',            direccion: 'Calle Plateros 316, Cusco',      ...d(17, '22:00'), mapa_url: '', foto_url: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=800&q=70', estado: 'Últimas entradas' },
+    { id: 4, ciudad: 'Trujillo', evento: 'Gira Nacional 2026',    local: 'Teatro Municipal',      direccion: 'Jr. Pizarro 640, Trujillo',      ...d(30, '19:30'), mapa_url: '', foto_url: 'https://images.unsplash.com/photo-1429962714451-bb934ecdc4ec?auto=format&fit=crop&w=800&q=70', estado: 'Próximamente' }
+  ];
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   🔌 CAPA DE DATOS (Google Sheets / SheetDB / CSV)
+   ════════════════════════════════════════════════════════════════════════════ */
+const isConfigured = () =>
+  !!CONFIG.EVENTS_URL || (CONFIG.SHEET_ID && CONFIG.SHEET_ID !== '1AiTAltIdFnmu_WxLvV08M5HjTuf11YwsujhBK2qtdW0');
+
+function sheetCsvUrl(sheetName) {
+  return `https://docs.google.com/spreadsheets/d/${CONFIG.SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
+}
+
+/* Parser CSV robusto (soporta comillas, comas y saltos de línea dentro de celdas). */
+function parseCSV(text) {
+  const rows = []; let row = []; let cell = ''; let inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"' && text[i + 1] === '"') { cell += '"'; i++; }
+      else if (c === '"') inQuotes = false;
+      else cell += c;
+    } else if (c === '"') inQuotes = true;
+    else if (c === ',') { row.push(cell); cell = ''; }
+    else if (c === '\n' || c === '\r') {
+      if (c === '\r' && text[i + 1] === '\n') i++;
+      row.push(cell); rows.push(row); row = []; cell = '';
+    } else cell += c;
+  }
+  if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+
+  const clean = rows.filter(r => r.some(v => v.trim() !== ''));
+  if (!clean.length) return [];
+  const headers = clean[0].map(normalizeKey);
+  return clean.slice(1).map(r => Object.fromEntries(headers.map((h, i) => [h, (r[i] ?? '').trim()])));
+}
+
+/* "Mapa URL" → "mapa_url", "Dirección" → "direccion" */
+function normalizeKey(k) {
+  return String(k).trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, '_');
+}
+
+/* Descarga datos y detecta JSON (SheetDB) o CSV (Google Sheets) automáticamente. */
+async function fetchTable(url) {
+  const sep = url.includes('?') ? '&' : '?';
+  const res = await fetch(`${url}${sep}_=${Date.now()}`, { cache: 'no-store' }); // evita caché
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const text = await res.text();
+  const trimmed = text.trim();
+  if (trimmed.startsWith('<')) throw new Error('La hoja no es pública o la pestaña no existe.');
+  if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+    const json = JSON.parse(trimmed);
+    const arr = Array.isArray(json) ? json : (json.data || json.rows || []);
+    return arr.map(o => Object.fromEntries(Object.entries(o).map(([k, v]) => [normalizeKey(k), String(v ?? '').trim()])));
+  }
+  return parseCSV(text);
+}
+
+/* Convierte fecha + hora de la hoja a un objeto Date (hora local del visitante). */
+function parseEventDate(fecha, hora) {
+  if (!fecha) return null;
+  let y, m, d;
+  const f = String(fecha).trim();
+  let match;
+  if ((match = f.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/)))      [, y, m, d] = match;   // 2026-12-20
+  else if ((match = f.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})/))) [, d, m, y] = match;   // 20/12/2026
+  else { const t = new Date(f); if (isNaN(t)) return null; y = t.getFullYear(); m = t.getMonth() + 1; d = t.getDate(); }
+
+  let hh = 0, mm = 0;
+  const h = String(hora || '').trim().toLowerCase();
+  const hm = h.match(/(\d{1,2})(?::(\d{2}))?\s*(a\.?\s*m\.?|p\.?\s*m\.?)?/);
+  if (hm) {
+    hh = +hm[1]; mm = +(hm[2] || 0);
+    if (hm[3]?.startsWith('p') && hh < 12) hh += 12;
+    if (hm[3]?.startsWith('a') && hh === 12) hh = 0;
+  }
+  const date = new Date(+y, +m - 1, +d, hh, mm, 0);
+  return isNaN(date) ? null : date;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   🎟️  PRESENTACIONES + BANNER
+   ════════════════════════════════════════════════════════════════════════════ */
+let allEvents = [];       // todos los eventos tal cual vienen de la hoja
+let upcomingEvents = [];  // solo futuros, ordenados por fecha
+let nextEvent = null;     // el más cercano (banner)
+let lastRenderKey = '';
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const safeUrl = u => /^https?:\/\//i.test(String(u || '').trim()) ? String(u).trim() : '';
+
+function mapsLink(ev) {
+  const direct = safeUrl(ev.mapa_url);
+  if (direct) return direct;
+  const q = [ev.local || ev.evento, ev.direccion, ev.ciudad].filter(Boolean).join(', ');
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
+}
+
+function formatDate(date) {
+  const s = date.toLocaleDateString('es-ES', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+const formatTime = date => date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+
+function badgeStyle(estado) {
+  const e = (estado || '').toLowerCase();
+  if (e.includes('agotad') || e.includes('sold'))       return 'bg-zinc-800 text-white/80';
+  if (e.includes('%') || e.includes('oferta') || e.includes('descuento')) return 'bg-yellow-400 text-black';
+  if (e.includes('últim') || e.includes('ultim'))        return 'bg-orange-500 text-white';
+  if (e.includes('gratis') || e.includes('libre'))      return 'bg-emerald-500 text-black';
+  return 'bg-white text-black';
+}
+
+/* Filtra eventos pasados, ordena y actualiza la vista. Se llama al recibir
+   datos nuevos y también periódicamente (para ocultar los que van pasando). */
+function refreshView() {
+  const now = new Date();
+  upcomingEvents = allEvents
+    .map(ev => ({ ...ev, _date: parseEventDate(ev.fecha, ev.hora) }))
+    .filter(ev => ev._date && ev._date > now && (ev.evento || ev.local || ev.ciudad))
+    .sort((a, b) => a._date - b._date);
+
+  nextEvent = upcomingEvents[0] || null;
+  updateBannerText();
+
+  // Solo re-dibuja la cuadrícula si algo cambió (evita parpadeos).
+  const key = JSON.stringify(upcomingEvents.map(e => [e.id, e.ciudad, e.evento, e.local, e.direccion, e.fecha, e.hora, e.mapa_url, e.foto_url, e.estado]));
+  if (key !== lastRenderKey) { lastRenderKey = key; renderEvents(); }
+}
+
+function renderEvents() {
+  const grid = $('eventsGrid');
+  $('eventsEmpty').classList.toggle('hidden', upcomingEvents.length > 0);
+
+  grid.innerHTML = upcomingEvents.map((ev, i) => {
+    const photo = safeUrl(ev.foto_url) || CONFIG.DEFAULT_PHOTO;
+    const title = ev.evento || ev.local || 'Presentación';
+    const venue = ev.local && ev.local !== ev.evento ? ev.local : '';
+    return `
+    <article class="event-card group bg-[#141418] rounded-2xl overflow-hidden border border-white/5 hover:border-brand/60 transition flex flex-col shadow-xl">
+      <div class="relative h-48 overflow-hidden">
+        <img src="${esc(photo)}" alt="${esc(title)}" loading="lazy"
+             onerror="this.onerror=null;this.src='${esc(CONFIG.DEFAULT_PHOTO)}'"
+             class="card-img w-full h-full object-cover" />
+        <div class="absolute inset-0 bg-gradient-to-t from-[#141418] via-transparent to-black/30"></div>
+
+        <span class="absolute top-3 left-3 w-10 h-10 rounded-full bg-brand flex items-center justify-center font-display text-xl shadow-lg shadow-red-900/50">${i + 1}</span>
+        ${ev.estado ? `<span class="absolute top-3 right-3 px-3 py-1 rounded-full text-[11px] font-extrabold uppercase tracking-wide shadow ${badgeStyle(ev.estado)}">${esc(ev.estado)}</span>` : ''}
+
+        <span class="absolute bottom-3 left-3 text-xs font-bold uppercase tracking-widest text-white/90">
+          <i class="fa-solid fa-location-dot text-brand mr-1"></i>${esc(ev.ciudad)}
+        </span>
+      </div>
+
+      <div class="p-5 flex flex-col flex-1">
+        <h3 class="font-display text-2xl leading-tight">${esc(title)}</h3>
+        ${venue ? `<p class="text-sm text-white/80 font-semibold mt-0.5">${esc(venue)}</p>` : ''}
+        ${ev.direccion ? `<p class="text-sm text-white/55 mt-1"><i class="fa-solid fa-map-pin mr-1.5 text-white/40"></i>${esc(ev.direccion)}</p>` : ''}
+
+        <div class="flex flex-wrap gap-x-4 gap-y-1 mt-4 text-sm text-white/85">
+          <span><i class="fa-regular fa-calendar text-brand mr-1.5"></i>${formatDate(ev._date)}</span>
+          <span><i class="fa-regular fa-clock text-brand mr-1.5"></i>${formatTime(ev._date)}</span>
+        </div>
+
+        <a href="${esc(mapsLink(ev))}" target="_blank" rel="noopener noreferrer"
+           class="mt-auto pt-5 block">
+          <span class="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-brand hover:bg-brand-light transition font-bold text-sm">
+            <i class="fa-solid fa-diamond-turn-right"></i> Cómo Llegar
+          </span>
+        </a>
+      </div>
+    </article>`;
+  }).join('');
+}
+
+function renderSkeletons() {
+  $('eventsGrid').innerHTML = Array.from({ length: 4 }, () => `
+    <div class="rounded-2xl overflow-hidden border border-white/5">
+      <div class="skeleton h-48"></div>
+      <div class="p-5 space-y-3"><div class="skeleton h-6 w-3/4 rounded"></div><div class="skeleton h-4 w-1/2 rounded"></div><div class="skeleton h-10 rounded-xl mt-6"></div></div>
+    </div>`).join('');
+}
+
+function updateBannerText() {
+  if (!nextEvent) {
+    $('bannerTitle').textContent = 'Nuevas fechas muy pronto';
+    $('bannerInfo').textContent = 'Síguenos en redes para enterarte primero.';
+    ['cdDays', 'cdHours', 'cdMins', 'cdSecs'].forEach(id => $(id).textContent = '00');
+    return;
+  }
+  const ev = nextEvent;
+  $('bannerTitle').textContent = ev.evento || ev.local || 'Próxima presentación';
+  $('bannerInfo').innerHTML =
+    `<i class="fa-regular fa-calendar mr-1"></i>${esc(formatDate(ev._date))} · ${esc(formatTime(ev._date))}` +
+    ` &nbsp;<i class="fa-solid fa-location-dot mr-1"></i>${esc([ev.local && ev.local !== ev.evento ? ev.local : '', ev.ciudad].filter(Boolean).join(', '))}`;
+}
+
+/* Reloj de cuenta regresiva (cada segundo). Cuando llega a 0, salta al siguiente evento. */
+function tickCountdown() {
+  if (!nextEvent) return;
+  let diff = nextEvent._date - new Date();
+  if (diff <= 0) { refreshView(); return; }
+  const pad = n => String(n).padStart(2, '0');
+  const s = Math.floor(diff / 1000);
+  $('cdDays').textContent  = pad(Math.floor(s / 86400));
+  $('cdHours').textContent = pad(Math.floor((s % 86400) / 3600));
+  $('cdMins').textContent  = pad(Math.floor((s % 3600) / 60));
+  $('cdSecs').textContent  = pad(s % 60);
+}
+
+function setSyncStatus(ok, msg) {
+  const el = $('syncStatus');
+  const time = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  el.innerHTML = ok
+    ? `<span class="w-2 h-2 rounded-full bg-emerald-400 inline-block"></span> ${esc(msg)} · ${time}`
+    : `<i class="fa-solid fa-triangle-exclamation text-yellow-400"></i> ${esc(msg)}`;
+}
+
+async function loadEvents() {
+  if (!isConfigured()) {
+    allEvents = buildDemoEvents();
+    setSyncStatus(true, 'Modo demostración (configura tu Google Sheet)');
+    refreshView();
+    return;
+  }
+  try {
+    const url = CONFIG.EVENTS_URL || sheetCsvUrl(CONFIG.EVENTS_SHEET);
+    allEvents = await fetchTable(url);   // reemplaza TODO: filas borradas desaparecen
+    setSyncStatus(true, 'Sincronizado con Google Sheets');
+  } catch (err) {
+    console.error('Error cargando eventos:', err);
+    setSyncStatus(false, `No se pudo actualizar (${err.message}). Reintentando…`);
+  }
+  refreshView();
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   🎵 REPRODUCTOR DE MÚSICA
+   ════════════════════════════════════════════════════════════════════════════ */
+let songs = [];
+let currentSong = -1;
+const audio = $('audioPlayer');
+
+async function loadSongs() {
+  songs = DEFAULT_SONGS;
+  const url = CONFIG.SONGS_URL || (isConfigured() && CONFIG.SHEET_ID !== 'PEGA_AQUI_TU_ID' && CONFIG.SHEET_ID ? sheetCsvUrl(CONFIG.SONGS_SHEET) : '');
+  if (url) {
+    try {
+      const rows = (await fetchTable(url)).filter(r => safeUrl(r.audio_url));
+      if (rows.length) songs = rows;
+    } catch (err) { console.warn('Pestaña de canciones no disponible, se usan las canciones por defecto.', err); }
+  }
+  renderSongs();
+  selectSong(0, false);
+}
+
+function renderSongs() {
+  $('songCount').textContent = `${songs.length} ${songs.length === 1 ? 'canción' : 'canciones'}`;
+  $('songList').innerHTML = songs.map((s, i) => `
+    <li>
+      <button data-index="${i}" class="song-item w-full flex items-center gap-4 p-3 rounded-xl bg-[#141418] hover:bg-[#1d1d23] border border-transparent transition text-left">
+        <span class="w-8 text-center text-white/40 font-semibold song-num">${String(i + 1).padStart(2, '0')}</span>
+        <img src="${esc(safeUrl(s.portada_url) || CONFIG.DEFAULT_PHOTO)}" alt="" loading="lazy" class="w-12 h-12 rounded-lg object-cover shrink-0"
+             onerror="this.onerror=null;this.src='${esc(CONFIG.DEFAULT_PHOTO)}'" />
+        <span class="flex-1 min-w-0">
+          <span class="block font-semibold truncate song-title">${esc(s.titulo || 'Sin título')}</span>
+          <span class="block text-sm text-white/50 truncate">${esc(s.artista || '')}</span>
+        </span>
+        <span class="song-duration text-sm text-white/40 tabular-nums"></span>
+        <i class="fa-solid fa-play text-white/40 song-icon w-5 text-center"></i>
+      </button>
+    </li>`).join('');
+
+  // Carga la duración de cada canción en segundo plano.
+  songs.forEach((s, i) => {
+    const a = new Audio(); a.preload = 'metadata'; a.src = s.audio_url;
+    a.addEventListener('loadedmetadata', () => {
+      const el = document.querySelectorAll('.song-duration')[i];
+      if (el && isFinite(a.duration)) el.textContent = fmtTime(a.duration);
+    });
+  });
+}
+
+const fmtTime = sec => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
+
+function selectSong(index, autoplay = true) {
+  if (!songs.length) return;
+  currentSong = (index + songs.length) % songs.length;
+  const s = songs[currentSong];
+  audio.src = s.audio_url;
+  $('playerTitle').textContent = s.titulo || 'Sin título';
+  $('playerArtist').textContent = s.artista || '';
+  $('playerCover').src = safeUrl(s.portada_url) || CONFIG.DEFAULT_PHOTO;
+  if (autoplay) audio.play().catch(err => console.warn('No se pudo reproducir:', err));
+  updateSongUI();
+}
+
+function updateSongUI() {
+  const playing = !audio.paused;
+  $('btnPlay').innerHTML = `<i class="fa-solid fa-${playing ? 'pause' : 'play'}"></i>`;
+  document.querySelectorAll('.song-item').forEach((btn, i) => {
+    const active = i === currentSong;
+    btn.classList.toggle('border-brand/60', active);
+    btn.classList.toggle('bg-[#1d1d23]', active);
+    btn.querySelector('.song-title').classList.toggle('text-brand', active);
+    btn.querySelector('.song-num').innerHTML = active
+      ? `<span class="eq ${playing ? '' : 'paused'} inline-flex items-end h-4"><span></span><span></span><span></span></span>`
+      : String(i + 1).padStart(2, '0');
+    btn.querySelector('.song-icon').className =
+      `fa-solid fa-${active && playing ? 'pause' : 'play'} ${active ? 'text-brand' : 'text-white/40'} song-icon w-5 text-center`;
+  });
+}
+
+$('songList').addEventListener('click', e => {
+  const btn = e.target.closest('.song-item');
+  if (!btn) return;
+  const i = +btn.dataset.index;
+  if (i === currentSong) audio.paused ? audio.play() : audio.pause();
+  else selectSong(i);
+});
+$('btnPlay').addEventListener('click', () => audio.paused ? audio.play().catch(() => {}) : audio.pause());
+$('btnPrev').addEventListener('click', () => selectSong(currentSong - 1));
+$('btnNext').addEventListener('click', () => selectSong(currentSong + 1));
+audio.addEventListener('play', updateSongUI);
+audio.addEventListener('pause', updateSongUI);
+audio.addEventListener('ended', () => selectSong(currentSong + 1));   // reproducción continua
+
+/* ════════════════════════════════════════════════════════════════════════════
+   🚀 INICIO
+   ════════════════════════════════════════════════════════════════════════════ */
+// Ajusta el espaciador y la barra de navegación a la altura real del banner.
+function syncBannerHeight() {
+  const h = $('alertBanner').offsetHeight;
+  $('bannerSpacer').style.height = h + 'px';
+  $('mainNav').style.top = h + 'px';
+}
+new ResizeObserver(syncBannerHeight).observe($('alertBanner'));
+
+$('year').textContent = new Date().getFullYear();
+renderSkeletons();
+loadSongs();
+loadEvents();
+
+setInterval(tickCountdown, 1000);                              // reloj en vivo
+setInterval(refreshView, 30 * 1000);                           // oculta eventos que van pasando
+setInterval(loadEvents, CONFIG.REFRESH_SECONDS * 1000);        // relee la hoja (tiempo real)
+document.addEventListener('visibilitychange', () => { if (!document.hidden) loadEvents(); }); // al volver a la pestaña
+</script>
+</body>
+</html>
